@@ -15,7 +15,7 @@ from scrapers import (
     scrape_dislicores,
     scrape_exito,
     scrape_carulla,
-    scrape_rappi,
+    scrape_olimpica,
     scrape_jumbo,
     scrape_larecetta,
 )
@@ -60,7 +60,7 @@ ALL_SCRAPERS = [
     scrape_dislicores,
     scrape_exito,
     scrape_carulla,
-    scrape_rappi,
+    scrape_olimpica,
     scrape_jumbo,
     scrape_larecetta,
 ]
@@ -177,7 +177,7 @@ async def list_stores():
             {"name": "Dislicores", "url": "https://www.dislicores.com", "color": "#8B0000"},
             {"name": "Éxito", "url": "https://www.exito.com", "color": "#FFD700"},
             {"name": "Carulla", "url": "https://www.carulla.com", "color": "#2E8B57"},
-            {"name": "Rappi", "url": "https://www.rappi.com.co", "color": "#FF441F"},
+            {"name": "Olímpica", "url": "https://www.olimpica.com", "color": "#005A9C"},
             {"name": "Jumbo", "url": "https://www.tiendasjumbo.co", "color": "#E31837"},
             {"name": "La Recetta", "url": "https://www.larecetta.co", "color": "#722F37"},
         ]

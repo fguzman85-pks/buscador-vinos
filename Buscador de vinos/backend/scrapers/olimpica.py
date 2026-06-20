@@ -1,4 +1,4 @@
-"""Scraper for Jumbo Colombia (jumbocolombia.com) using VTEX Intelligent Search."""
+"""Scraper for Olímpica (olimpica.com) using their VTEX search API."""
 import logging
 import httpx
 from typing import Optional
@@ -6,10 +6,9 @@ from .base import calc_discount
 
 logger = logging.getLogger(__name__)
 
-STORE_NAME = "Jumbo"
-STORE_COLOR = "#E31837"
-BASE_URL = "https://www.jumbocolombia.com"
-IS_API = f"{BASE_URL}/_v/api/intelligent-search/product_search/"
+STORE_NAME = "Olímpica"
+STORE_COLOR = "#005A9C"
+API_URL = "https://www.olimpica.com/api/catalog_system/pub/products/search"
 
 _WINE_KEYWORDS = {
     "vino", "wine", "malbec", "cabernet", "pinot", "chardonnay", "merlot",
@@ -18,29 +17,22 @@ _WINE_KEYWORDS = {
     "torrontes", "bonarda", "verdejo", "rioja",
 }
 
-_NON_WINE = {
-    "copa", "enfriador", "dispensador", "soporte", "botellero", "descorchador",
-    "vinilo", "vinagre", "tinte", "pintura", "sofa", "cama", "mujer", "hombre",
-    "betun", "beige", "ropa", "camisa", "kit vino",
-}
-
 
 def _is_wine(name: str) -> bool:
-    lower = name.lower()
-    if any(kw in lower for kw in _NON_WINE):
-        return False
-    return any(kw in lower for kw in _WINE_KEYWORDS)
+    name_lower = name.lower()
+    return any(kw in name_lower for kw in _WINE_KEYWORDS)
 
 
-async def scrape_jumbo(query: Optional[str] = None) -> list[dict]:
-    """Fetch wine products from Jumbo Colombia via VTEX Intelligent Search API."""
+async def scrape_olimpica(query: Optional[str] = None) -> list[dict]:
+    """Fetch wine products from Olímpica using their VTEX search API."""
     results = []
     try:
         search_term = query if query else "vino tinto"
         params = {
-            "query": search_term,
-            "count": 50,
-            "sort": "discount:desc",
+            "ft": search_term,
+            "_from": 0,
+            "_to": 49,
+            "O": "OrderByBestDiscountDESC",
         }
 
         headers = {
@@ -49,23 +41,21 @@ async def scrape_jumbo(query: Optional[str] = None) -> list[dict]:
                 "AppleWebKit/537.36 Chrome/124.0.0.0 Mobile Safari/537.36"
             ),
             "Accept": "application/json",
-            "Referer": BASE_URL + "/",
+            "Referer": "https://www.olimpica.com/",
         }
 
         async with httpx.AsyncClient(headers=headers, timeout=15, follow_redirects=True, verify=False) as client:
-            resp = await client.get(IS_API, params=params)
+            resp = await client.get(API_URL, params=params)
             resp.raise_for_status()
             data = resp.json()
-            products = data.get("products", [])
 
-            for item in products:
+            for item in data:
                 try:
                     name = item.get("productName", "")
                     if not name or not _is_wine(name):
                         continue
 
-                    items = item.get("items", [{}])
-                    sellers = items[0].get("sellers", [{}]) if items else []
+                    sellers = item.get("items", [{}])[0].get("sellers", [{}])
                     if not sellers:
                         continue
 
@@ -76,8 +66,8 @@ async def scrape_jumbo(query: Optional[str] = None) -> list[dict]:
                     if not price:
                         continue
 
-                    link = f"{BASE_URL}/{item.get('linkText', '')}/p"
-                    images = items[0].get("images", []) if items else []
+                    link = f"https://www.olimpica.com/{item.get('linkText', '')}/p"
+                    images = item.get("items", [{}])[0].get("images", [{}])
                     image = images[0].get("imageUrl") if images else None
 
                     results.append({
@@ -95,10 +85,10 @@ async def scrape_jumbo(query: Optional[str] = None) -> list[dict]:
                         "currency": "COP",
                     })
                 except Exception as e:
-                    logger.debug(f"Error parsing Jumbo item: {e}")
+                    logger.debug(f"Error parsing Olímpica item: {e}")
                     continue
 
     except Exception as e:
-        logger.warning(f"Jumbo scraper error: {e}")
+        logger.warning(f"Olímpica scraper error: {e}")
 
     return results

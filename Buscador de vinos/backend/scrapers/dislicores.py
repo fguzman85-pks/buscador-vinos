@@ -1,77 +1,73 @@
-"""Scraper for Dislicores (dislicores.com)."""
+"""Scraper for Dislicores (dislicores.com) using their VTEX search API."""
 import logging
+import httpx
 from typing import Optional
-from bs4 import BeautifulSoup
-from .base import make_client, clean_price, calc_discount
+from .base import calc_discount
 
 logger = logging.getLogger(__name__)
 
 STORE_NAME = "Dislicores"
 STORE_COLOR = "#8B0000"
-BASE_URL = "https://www.dislicores.com"
+API_URL = "https://www.dislicores.com/api/catalog_system/pub/products/search"
 
 
 async def scrape_dislicores(query: Optional[str] = None) -> list[dict]:
-    """
-    Fetch wine products from Dislicores.
-    If query is provided, search for that term; otherwise fetch promoted wines.
-    """
+    """Fetch wine products from Dislicores using their VTEX search API."""
     results = []
     try:
-        async with make_client() as client:
-            if query:
-                url = f"{BASE_URL}/catalogsearch/result/?q={query.replace(' ', '+')}"
-            else:
-                url = f"{BASE_URL}/vinos.html?sort=price&dir=asc"
+        search_term = query if query else "vino"
+        params = {
+            "ft": search_term,
+            "_from": 0,
+            "_to": 24,
+            "O": "OrderByBestDiscountDESC",
+        }
 
-            resp = await client.get(url)
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Linux; Android 12) "
+                "AppleWebKit/537.36 Chrome/124.0.0.0 Mobile Safari/537.36"
+            ),
+            "Accept": "application/json",
+            "Referer": "https://www.dislicores.com/",
+        }
+
+        async with httpx.AsyncClient(headers=headers, timeout=15, follow_redirects=True, verify=False) as client:
+            resp = await client.get(API_URL, params=params)
             resp.raise_for_status()
-            soup = BeautifulSoup(resp.text, "html.parser")
+            data = resp.json()
 
-            # Dislicores uses standard Magento product grid
-            items = soup.select("li.product-item, .item.product")
-            if not items:
-                items = soup.select(".product-item-info")
-
-            for item in items[:20]:
+            for item in data[:20]:
                 try:
-                    name_el = item.select_one(".product-item-name a, .product-name a, h2.product-name a")
-                    if not name_el:
+                    name = item.get("productName", "")
+                    if not name:
                         continue
 
-                    name = name_el.get_text(strip=True)
-                    link = name_el.get("href", "")
-                    if link and not link.startswith("http"):
-                        link = BASE_URL + link
-
-                    # Price: look for special (discounted) price first
-                    special_el = item.select_one(".special-price .price, .price-final_price .price")
-                    regular_el = item.select_one(".old-price .price, .regular-price .price")
-                    price_el = item.select_one(".price")
-
-                    current_price = clean_price(
-                        (special_el or price_el or "").get_text(strip=True)
-                        if hasattr((special_el or price_el or ""), "get_text")
-                        else ""
-                    )
-                    if not current_price:
+                    sellers = item.get("items", [{}])[0].get("sellers", [{}])
+                    if not sellers:
                         continue
 
-                    original_price = clean_price(
-                        regular_el.get_text(strip=True) if regular_el else None
-                    )
+                    offer = sellers[0].get("commertialOffer", {})
+                    price = offer.get("Price")
+                    list_price = offer.get("ListPrice")
 
-                    # Image
-                    img_el = item.select_one("img.product-image-photo, img")
-                    image = img_el.get("src") or img_el.get("data-src") if img_el else None
+                    if not price:
+                        continue
+
+                    link = f"https://www.dislicores.com/{item.get('linkText', '')}/p"
+                    images = item.get("items", [{}])[0].get("images", [{}])
+                    image = images[0].get("imageUrl") if images else None
 
                     results.append({
                         "store": STORE_NAME,
                         "store_color": STORE_COLOR,
                         "name": name,
-                        "price": current_price,
-                        "original_price": original_price,
-                        "discount": calc_discount(original_price, current_price),
+                        "price": float(price),
+                        "original_price": float(list_price) if list_price and list_price != price else None,
+                        "discount": calc_discount(
+                            float(list_price) if list_price else None,
+                            float(price)
+                        ),
                         "url": link,
                         "image": image,
                         "currency": "COP",

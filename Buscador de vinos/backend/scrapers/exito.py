@@ -18,7 +18,6 @@ async def scrape_exito(query: Optional[str] = None) -> list[dict]:
         search_term = query if query else "vino"
         params = {
             "ft": search_term,
-            "fq": "C:/Vinos y Licores/",
             "_from": 0,
             "_to": 24,
             "O": "OrderByBestDiscountDESC",
